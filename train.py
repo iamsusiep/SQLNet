@@ -7,8 +7,20 @@ import numpy as np
 import datetime
 
 import argparse
+import visdom
+import numpy as np
 
 if __name__ == '__main__':
+
+    #visdom connection check
+    viz = visdom.Visdom(port=8098)
+
+    startup_sec =1 
+    while not viz.check_connection() and startup_sec > 0:
+        time.sleep(0.1)
+        startup_sec -= 0.1
+    assert viz.check_connection(), 'No connection could be formed quickly'
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--toy', action='store_true', 
             help='If set, use small data; used for fast debugging.')
@@ -109,6 +121,16 @@ if __name__ == '__main__':
         best_cond_idx = 0
         print 'Init dev acc_qm: %s\n  breakdown on (agg, sel, where): %s'%\
                 init_acc
+
+        l_train_acc_qm = viz.line(X=np.zeros((1,)), Y=np.zeros((1,)), 
+                            opts=dict(xlabel='epoch', ylabel ='train_acc_qm'))
+
+        l_dev_acc_qm = viz.line(X=np.zeros((1,)), Y=np.asarray([init_acc[0]]), 
+                            opts=dict(xlabel='epoch', ylabel ='dev_acc_qm'))
+
+        l_train_loss = viz.line(X=np.zeros((1,)), Y=np.zeros((1,)), 
+                            opts=dict(xlabel='epoch', ylabel ='loss'))
+
         if TRAIN_AGG:
             torch.save(model.agg_pred.state_dict(), agg_m)
             if args.train_emb:
@@ -121,50 +143,74 @@ if __name__ == '__main__':
             torch.save(model.cond_pred.state_dict(), cond_m)
             if args.train_emb:
                 torch.save(model.cond_embed_layer.state_dict(), cond_e)
-        for i in range(100):
-            print 'Epoch %d @ %s'%(i+1, datetime.datetime.now())
-            print ' Loss = %s'%epoch_train(
-                    model, optimizer, BATCH_SIZE, 
-                    sql_data, table_data, TRAIN_ENTRY)
-            print ' Train acc_qm: %s\n   breakdown result: %s'%epoch_acc(
-                    model, BATCH_SIZE, sql_data, table_data, TRAIN_ENTRY)
-            #val_acc = epoch_token_acc(model, BATCH_SIZE, val_sql_data, val_table_data, TRAIN_ENTRY)
-            val_acc = epoch_acc(model,
-                    BATCH_SIZE, val_sql_data, val_table_data, TRAIN_ENTRY)
-            print ' Dev acc_qm: %s\n   breakdown result: %s'%val_acc
-            if TRAIN_AGG:
-                if val_acc[1][0] > best_agg_acc:
-                    best_agg_acc = val_acc[1][0]
-                    best_agg_idx = i+1
-                    torch.save(model.agg_pred.state_dict(),
-                        'saved_model/epoch%d.agg_model%s'%(i+1, args.suffix))
-                    torch.save(model.agg_pred.state_dict(), agg_m)
-                    if args.train_emb:
-                        torch.save(model.agg_embed_layer.state_dict(),
-                        'saved_model/epoch%d.agg_embed%s'%(i+1, args.suffix))
-                        torch.save(model.agg_embed_layer.state_dict(), agg_e)
-            if TRAIN_SEL:
-                if val_acc[1][1] > best_sel_acc:
-                    best_sel_acc = val_acc[1][1]
-                    best_sel_idx = i+1
-                    torch.save(model.sel_pred.state_dict(),
-                        'saved_model/epoch%d.sel_model%s'%(i+1, args.suffix))
-                    torch.save(model.sel_pred.state_dict(), sel_m)
-                    if args.train_emb:
-                        torch.save(model.sel_embed_layer.state_dict(),
-                        'saved_model/epoch%d.sel_embed%s'%(i+1, args.suffix))
-                        torch.save(model.sel_embed_layer.state_dict(), sel_e)
-            if TRAIN_COND:
-                if val_acc[1][2] > best_cond_acc:
-                    best_cond_acc = val_acc[1][2]
-                    best_cond_idx = i+1
-                    torch.save(model.cond_pred.state_dict(),
-                        'saved_model/epoch%d.cond_model%s'%(i+1, args.suffix))
-                    torch.save(model.cond_pred.state_dict(), cond_m)
-                    if args.train_emb:
-                        torch.save(model.cond_embed_layer.state_dict(),
-                        'saved_model/epoch%d.cond_embed%s'%(i+1, args.suffix))
-                        torch.save(model.cond_embed_layer.state_dict(), cond_e)
-            print ' Best val acc = %s, on epoch %s individually'%(
-                    (best_agg_acc, best_sel_acc, best_cond_acc),
-                    (best_agg_idx, best_sel_idx, best_cond_idx))
+        with open ("train_loss.txt", "w") as loss_f, open ("dev_acc.txt", "w") as dev_f, open ("train_acc.txt", "w") as train_f:
+            for i in range(100):
+                loss = epoch_train(
+                        model, optimizer, BATCH_SIZE, 
+                        sql_data, table_data, TRAIN_ENTRY)
+                train_acc_qm = epoch_acc(
+                        model, BATCH_SIZE, sql_data, table_data, TRAIN_ENTRY)
+                #val_acc = epoch_token_acc(model, BATCH_SIZE, val_sql_data, val_table_data, TRAIN_ENTRY)
+                val_acc = epoch_acc(model,
+                        BATCH_SIZE, val_sql_data, val_table_data, TRAIN_ENTRY)
+                print 'Epoch %d @ %s'%(i+1, datetime.datetime.now())
+                print ' Loss = %s'%loss
+                print ' Train acc_qm: %s\n   breakdown result: %s'% train_acc_qm
+                print ' Dev acc_qm: %s\n   breakdown result: %s'%val_acc
+                if TRAIN_AGG:
+                    if val_acc[1][0] > best_agg_acc:
+                        best_agg_acc = val_acc[1][0]
+                        best_agg_idx = i+1
+                        torch.save(model.agg_pred.state_dict(),
+                            'saved_model/epoch%d.agg_model%s'%(i+1, args.suffix))
+                        torch.save(model.agg_pred.state_dict(), agg_m)
+                        if args.train_emb:
+                            torch.save(model.agg_embed_layer.state_dict(),
+                            'saved_model/epoch%d.agg_embed%s'%(i+1, args.suffix))
+                            torch.save(model.agg_embed_layer.state_dict(), agg_e)
+                if TRAIN_SEL:
+                    if val_acc[1][1] > best_sel_acc:
+                        best_sel_acc = val_acc[1][1]
+                        best_sel_idx = i+1
+                        torch.save(model.sel_pred.state_dict(),
+                            'saved_model/epoch%d.sel_model%s'%(i+1, args.suffix))
+                        torch.save(model.sel_pred.state_dict(), sel_m)
+                        if args.train_emb:
+                            torch.save(model.sel_embed_layer.state_dict(),
+                            'saved_model/epoch%d.sel_embed%s'%(i+1, args.suffix))
+                            torch.save(model.sel_embed_layer.state_dict(), sel_e)
+                if TRAIN_COND:
+                    if val_acc[1][2] > best_cond_acc:
+                        best_cond_acc = val_acc[1][2]
+                        best_cond_idx = i+1
+                        torch.save(model.cond_pred.state_dict(),
+                            'saved_model/epoch%d.cond_model%s'%(i+1, args.suffix))
+                        torch.save(model.cond_pred.state_dict(), cond_m)
+                        if args.train_emb:
+                            torch.save(model.cond_embed_layer.state_dict(),
+                            'saved_model/epoch%d.cond_embed%s'%(i+1, args.suffix))
+                            torch.save(model.cond_embed_layer.state_dict(), cond_e)
+                print ' Best val acc = %s, on epoch %s individually'%(
+                        (best_agg_acc, best_sel_acc, best_cond_acc),
+                        (best_agg_idx, best_sel_idx, best_cond_idx))
+
+                loss_f.write('%s\n' % loss)
+                loss_f.flush()
+
+                dev_f.write('%s\n' % [val_acc[0]])
+                dev_f.flush()
+
+                train_f.write('%s\n' % [train_acc_qm[0]])
+                train_f.flush()
+
+                viz.line(X=np.asarray([i+1]), Y=np.asarray([train_acc_qm[0]]), win = l_train_acc_qm,
+                        update='append')
+
+                viz.line(X=np.asarray([i+1]), Y=np.asarray([val_acc[0]]), win = l_dev_acc_qm,
+                        update='append')
+
+                viz.line(X=np.asarray([i+1]), Y=np.asarray([loss]), win = l_train_loss,
+                        update='append')
+            loss_f.close()
+            dev_f.close()
+            train_f.close()
