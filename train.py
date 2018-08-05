@@ -36,6 +36,12 @@ if __name__ == '__main__':
             help='If set, then train Seq2SQL model; default is SQLNet model.')
     parser.add_argument('--train_emb', action='store_true',
             help='Train word embedding for SQLNet(requires pretrained model).')
+    parser.add_argument('--dropouth', type=float, default=0.3,
+                    help='dropout for rnn layers (0 = no dropout)')
+    parser.add_argument('--dropouti', type=float, default=0.65,
+                        help='dropout for input embedding layers (0 = no dropout)')
+    parser.add_argument('--dropoute', type=float, default=0.1,
+                        help='dropout to remove words from embedding layer (0 = no dropout)')
     args = parser.parse_args()
 
     N_word=300
@@ -66,7 +72,7 @@ if __name__ == '__main__':
         assert not args.train_emb, "Seq2SQL can\'t train embedding."
     else:
         model = SQLNet(word_emb, N_word=N_word, use_ca=args.ca,
-                gpu=GPU, trainable_emb = args.train_emb)
+                gpu=GPU, trainable_emb = args.train_emb, dropouth = args.dropouth, dropouti = args.dropouti, dropoute = args.dropoute)
         assert not args.rl, "SQLNet can\'t do reinforcement learning."
     optimizer = torch.optim.Adam(model.parameters(),
             lr=learning_rate, weight_decay = 0)

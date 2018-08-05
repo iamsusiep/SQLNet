@@ -12,7 +12,7 @@ from modules.sqlnet_condition_predict import SQLNetCondPredictor
 
 class SQLNet(nn.Module):
     def __init__(self, word_emb, N_word, N_h=100, N_depth=2,
-            gpu=False, use_ca=True, trainable_emb=False):
+            gpu=False, use_ca=True, trainable_emb=False, dropouth=0.5, dropouti=0.5, dropoute=0.1):
         super(SQLNet, self).__init__()
         self.use_ca = use_ca
         self.trainable_emb = trainable_emb
@@ -20,7 +20,9 @@ class SQLNet(nn.Module):
         self.gpu = gpu
         self.N_h = N_h
         self.N_depth = N_depth
-
+        self.dropouti = dropouti
+        self.dropouth = dropouth
+        self.dropoute = dropoute
         self.max_col_num = 45
         self.max_tok_num = 200
         self.SQL_TOK = ['<UNK>', '<END>', 'WHERE', 'AND',
