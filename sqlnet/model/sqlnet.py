@@ -14,6 +14,8 @@ class SQLNet(nn.Module):
     def __init__(self, word_emb, N_word, N_h=100, N_depth=2,
             gpu=False, use_ca=True, trainable_emb=False, dropouth=0.5, dropouti=0.5, dropoute=0.1):
         super(SQLNet, self).__init__()
+        self.lockdrop = LockedDropout()
+
         self.use_ca = use_ca
         self.trainable_emb = trainable_emb
 
@@ -97,8 +99,12 @@ class SQLNet(nn.Module):
         sel_score = None
         cond_score = None
 
+
         #Predict aggregator
         if self.trainable_emb:
+            emb = embedded_dropout(self.agg_embed_layer, input, dropout=self.dropoute if self.training else 0)
+            emb = self.lockdrop(emb, self.dropouti)
+
             if pred_agg:
                 x_emb_var, x_len = self.agg_embed_layer.gen_x_batch(q, col)
                 col_inp_var, col_name_len, col_len = \
